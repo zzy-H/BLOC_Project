@@ -1,0 +1,33 @@
+# 编译器输出
+MDK-ARM/**/*.o
+MDK-ARM/**/*.crf
+MDK-ARM/**/*.d
+MDK-ARM/**/*.axf
+MDK-ARM/**/*.hex
+MDK-ARM/**/*.htm
+MDK-ARM/**/*.map
+MDK-ARM/**/*.dep
+MDK-ARM/**/*.lst
+MDK-ARM/**/*.lnp
+MDK-ARM/**/*.sct
+MDK-ARM/**/*.iex
+MDK-ARM/**/*.scvd
+MDK-ARM/DebugConfig/
+MDK-ARM/RTE/
+
+# IAR IDE
+EWARM/**/*.o
+EWARM/**/*.d
+
+# Build log
+Build.log
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# System files
+*.orig
+
+# Reasonix
+.reasonix/
