@@ -31,3 +31,6 @@ Desktop.ini
 
 # Reasonix
 .reasonix/
+
+# IDE
+**/.vscode/

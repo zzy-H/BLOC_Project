@@ -23,8 +23,9 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "multi_button.h"
-#include "FOC_mode0.h"
+#include "FOC_Model.h"
 #include "hall_driev.h"
+#include "myuart.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -63,6 +64,7 @@ extern ADC_HandleTypeDef hadc2;
 extern FDCAN_HandleTypeDef hfdcan1;
 extern TIM_HandleTypeDef htim4;
 extern DMA_HandleTypeDef hdma_usart3_tx;
+extern DMA_HandleTypeDef hdma_usart3_rx;
 extern UART_HandleTypeDef huart3;
 /* USER CODE BEGIN EV */
 
@@ -193,10 +195,9 @@ void SysTick_Handler(void)
   /* USER CODE BEGIN SysTick_IRQn 0 */
 	
 	static uint8_t tick_cnt = 0;
-	//æ¯5msè°ƒç”¨ä¸€æ¬¡
 	if(++tick_cnt >= 5)
 	{
-		button_ticks();//åœ¨multi_button.cä¸­å†™å¥½äº†ï¼Œè¦æ±‚5msè°ƒç”¨ä¸€æ¬¡
+		button_ticks();
 		tick_cnt = 0;
 	}
 	
@@ -230,6 +231,20 @@ void DMA1_Channel1_IRQHandler(void)
 }
 
 /**
+  * @brief This function handles DMA1 channel2 global interrupt.
+  */
+void DMA1_Channel2_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Channel2_IRQn 0 */
+
+  /* USER CODE END DMA1_Channel2_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_usart3_rx);
+  /* USER CODE BEGIN DMA1_Channel2_IRQn 1 */
+
+  /* USER CODE END DMA1_Channel2_IRQn 1 */
+}
+
+/**
   * @brief This function handles ADC1 and ADC2 global interrupt.
   */
 void ADC1_2_IRQHandler(void)
@@ -250,7 +265,7 @@ void ADC1_2_IRQHandler(void)
 void FDCAN1_IT0_IRQHandler(void)
 {
   /* USER CODE BEGIN FDCAN1_IT0_IRQn 0 */
-	HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);  // è¿›ä¸­æ–­å°±é—ª
+	HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
   /* USER CODE END FDCAN1_IT0_IRQn 0 */
   HAL_FDCAN_IRQHandler(&hfdcan1);
   /* USER CODE BEGIN FDCAN1_IT0_IRQn 1 */
@@ -278,7 +293,10 @@ void TIM4_IRQHandler(void)
 void USART3_IRQHandler(void)
 {
   /* USER CODE BEGIN USART3_IRQn 0 */
-
+	
+	UART3_RxHandler();
+	
+	
   /* USER CODE END USART3_IRQn 0 */
   HAL_UART_IRQHandler(&huart3);
   /* USER CODE BEGIN USART3_IRQn 1 */
@@ -289,23 +307,28 @@ void USART3_IRQHandler(void)
 /* USER CODE BEGIN 1 */
 
 extern HALL_Handle_t HALL_Handle;
-/* å®šæ—¶å™¨ 4 è¾“å…¥æ•èŽ·ä¸­æ–­å›žè°ƒï¼ˆéœå°”ä¿¡å·å˜åŒ–æ—¶è§¦å‘ï¼‰*/
+/* ¶¨Ê±Æ÷ÊäÈë²¶»ñÖÐ¶Ï»Øµ÷º¯Êý
+ * ´¥·¢Ê±»ú£ºTIMÊäÈë²¶»ñÍ¨µÀ¼ì²âµ½µçÆ½Ìø±äÊ±½øÈë£¬ÓÃÓÚ»ô¶û´«¸ÐÆ÷±ßÑØ²¶»ñ
+ */
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
-	 // ä»…å¤„ç†TIM4éœå°”æ•èŽ·å®šæ—¶å™¨
+	// Ö»´¦ÀíTIM4¶¨Ê±Æ÷µÄ²¶»ñÖÐ¶Ï£¬ÆäËû¶¨Ê±Æ÷Ö±½ÓÍË³ö
     if (htim->Instance != TIM4)
     {
         return;
     }
-     // éœå°”A/B/Cä»»æ„ç›¸è·³å˜ï¼Œæ›´æ–°éœå°”çŠ¶æ€ä¸Žç”µè§’åº¦
+
+    // ÅÐ¶ÏÖÐ¶ÏÀ´Ô´£º»ô¶ûA/B/CÏà£¨Í¨µÀ1/2/3£©ÈÎÒâÒ»Â·²úÉú±ßÑØ²¶»ñ
     if(htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1 ||
 		htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2 ||
 		htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3)
     {
-        // 1. éœå°”è¯‘ç ï¼šè¯»å–ä¸‰è·¯éœå°”ç”µå¹³â†’æŸ¥è¡¨å¾—åˆ°çœŸå®žç”µè§’åº¦â†’è®¡ç®—è½¬é€Ÿä¸Žç”µè§’é€Ÿåº¦
+        // ²½Öè1£º»ô¶û½âÂëº¯Êý
+        // ¶ÁÈ¡ÈýÏà»ô¶ûµçÆ½²é±í£¬¼ÆËãµ±Ç°ÕæÊµµç½Ç¶È¡¢µç»ú×ªËÙ¡¢µç½ÇËÙ¶È
         HALL_Get_Electrical_Angle(&HALL_Handle);
         
-        // 2. ç”¨éœå°”çœŸå®žè§’åº¦è¦†ç›–æ’è¡¥è§’åº¦ï¼Œæ¶ˆé™¤ç´¯ç§¯è¯¯å·®
+        // ²½Öè2£ºÓÃ»ô¶ûÊµ²âµç½Ç¶È¸²¸Ç²åÖµÔ¤¹À½Ç¶È
+        // ÐÞÕý»ý·ÖÀÛ¼Æ½Ç¶ÈÎó²î£¬Ïû³ý³¤Ê±¼äÔËÐÐ´øÀ´µÄ½Ç¶ÈÆ¯ÒÆ
         HALL_Handle.HallElAngle = HALL_Handle.MeasuredElAngle;
     }
 }

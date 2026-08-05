@@ -26,7 +26,7 @@
 #include "multi_button.h"
 #include "main.h"
 #include "VFmode.h"
-#include "FOC_mode0.h"
+#include "FOC_Model.h"
 #include "hall_driev.h"
 
 uint8_t ADC_OffSet = 0;
@@ -100,7 +100,7 @@ void MX_ADC1_Init(void)
   sConfigInjected.InjectedSingleDiff = ADC_SINGLE_ENDED;
   sConfigInjected.InjectedOffsetNumber = ADC_OFFSET_NONE;
   sConfigInjected.InjectedOffset = 0;
-  sConfigInjected.InjectedNbrOfConversion = 2;
+  sConfigInjected.InjectedNbrOfConversion = 3;
   sConfigInjected.InjectedDiscontinuousConvMode = DISABLE;
   sConfigInjected.AutoInjectedConv = DISABLE;
   sConfigInjected.QueueInjectedContext = DISABLE;
@@ -121,11 +121,20 @@ void MX_ADC1_Init(void)
     Error_Handler();
   }
 
+  /** Configure Injected Channel
+  */
+  sConfigInjected.InjectedChannel = ADC_CHANNEL_1;
+  sConfigInjected.InjectedRank = ADC_INJECTED_RANK_3;
+  if (HAL_ADCEx_InjectedConfigChannel(&hadc1, &sConfigInjected) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_1;
+  sConfig.Channel = ADC_CHANNEL_11;
   sConfig.Rank = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_2CYCLES_5;
+  sConfig.SamplingTime = ADC_SAMPLETIME_6CYCLES_5;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
   sConfig.OffsetNumber = ADC_OFFSET_NONE;
   sConfig.Offset = 0;
@@ -248,13 +257,14 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef* adcHandle)
     PA0     ------> ADC1_IN1
     PA2     ------> ADC1_IN3
     PB1     ------> ADC1_IN12
+    PB12     ------> ADC1_IN11
     */
     GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_2;
     GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-    GPIO_InitStruct.Pin = GPIO_PIN_1;
+    GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_12;
     GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
@@ -323,10 +333,11 @@ void HAL_ADC_MspDeInit(ADC_HandleTypeDef* adcHandle)
     PA0     ------> ADC1_IN1
     PA2     ------> ADC1_IN3
     PB1     ------> ADC1_IN12
+    PB12     ------> ADC1_IN11
     */
     HAL_GPIO_DeInit(GPIOA, GPIO_PIN_0|GPIO_PIN_2);
 
-    HAL_GPIO_DeInit(GPIOB, GPIO_PIN_1);
+    HAL_GPIO_DeInit(GPIOB, GPIO_PIN_1|GPIO_PIN_12);
 
     /* ADC1 interrupt Deinit */
   /* USER CODE BEGIN ADC1:ADC1_2_IRQn disable */
@@ -402,8 +413,6 @@ void BSP_ADC_Init(void)
  * 三个通道都由 TIM1_CH4 触发注入组转换，
  * 因此在 ADC1 中断触发时读取 ADC2 的 JDR1，即可获取 ADC2 的转换结果。
  */
-static int VF_flag = 0;
-static uint16_t vf_count = 0;
 void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
     UNUSED(hadc);
@@ -421,53 +430,16 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
                 offset[1] /= 10.0f;
                 offset[2] /= 10.0f;
                 ADC_OffSet = 1;
-				
             }
         }
         else
         {
-			if (VF_flag == 0)
-			{
-				/* VF 开环拖动 */
-				VF_mode();
-				vf_count++;
-
-				/* 后台同步更新霍尔插值角度 */
-				HALL_Handle.MeasuredElAngle += HALL_Handle.AvrElSpeedDpp;
-
-				/* 切闭环*/
-				if (vf_count >= 10000)
-				{
-					// 1. 先手动更新一次速度反馈（开环时算法端口不刷新，必须补一次）
-					//    用底层霍尔实测的真实转速赋值给算法反馈口
-					HALL_rtU.SpeedFd = HALL_Handle.HallSpeed;  
-
-					// 2. 转速给定 = 当前实际转速，让速度环初始误差 = 0
-					HALL_rtU.SpeedRef = HALL_rtU.SpeedFd;
-
-					// 3. 清零所有PI积分器，彻底消除残留值（最关键的一步）
-					HALL_rtDW.Integrator_DSTATE = 0.0f;       // 速度环积分器清零
-					HALL_rtDW.Integrator_DSTATE_o = 0.0f;     // Id电流环积分器清零
-					HALL_rtDW.Integrator_DSTATE_l = 0.0f;     // Iq电流环积分器清零
-
-					// 4. 电角度平滑同步：用开环角度初始化霍尔角度，避免角度跳变
-					HALL_Handle.HallElAngle = VF_rtDW.UnitDelay_DSTATE;
-					HALL_Handle.MeasuredElAngle = VF_rtDW.UnitDelay_DSTATE; // 同步插值角度
-
-					// 5. 切换模式标志，下一个周期进入闭环
-					VF_flag = 1;
-				}
-			}
-			else
-			{
-				hall_FOC_mode();
-			}
-			
+            hall_FOC_mode();
         }
     }
 }
 
-// 读取母线电压（PA0，分压比 1/26，多次采样取平均，带超时保护）
+ //读取母线电压（PA0，分压比 1/26，多次采样取平均，带超时保护）
 float get_bus_voltage(void)
 {
     float sum = 0.0f;
@@ -487,7 +459,7 @@ float get_bus_voltage(void)
         if (timeout == 0) break;             /* 超时了，放弃本次 */
 
         uint32_t val = ADC1->DR;             /* 读结果，自动清 EOC */
-        sum += val * 0.020947f;              /* × (3.3/4096) × 26 */
+        sum += val * 0.020947f;              /* 脳 (3.3/4096) 脳 26 */
         valid++;
     }
     return (valid > 0) ? (sum / valid) : 0.0f;
@@ -508,7 +480,7 @@ void VF_mode(void)
 	VF_rtU.ud = 0.0f;
 	VF_rtU.uq = 12.0f;
 	VF_rtU.Freq = 4.0f;
-	
+	VF_rtU.Vbus = ADC1->JDR3 * 0.020947f;
 	VFmode_step();
 	
 	 /* 写 PWM*/
@@ -517,86 +489,46 @@ void VF_mode(void)
 	TIM1->CCR3 = (uint32_t)VF_rtY.tABC[2];   
 }
 
-//FOC有感闭环控制
-
-
-
+//FOC有感+无感一体化控制（使用 FOC_Model）
+extern uint8_t Hal_State;  // 0=无感(Flux), 1=有感(Hall)
 
 void hall_FOC_mode(void)
 {
-	/* 角度累加 + 校准（例程里的 ADC 回调逻辑）*/
-	
-	uint8_t hall_updated = HALL_Handle.bHallUpdated;  // 先保存
-	
-	//判断当正转一周角度变成偏差值时，进行校准
-	if(hall_updated)
-	{
-		//校准电角度
-		HALL_Handle.HallElAngle = HALL_Handle.MeasuredElAngle;
-		
-		HALL_Handle.MeasuredElAngle += HALL_Handle.AvrElSpeedDpp;
-		
-		HALL_Handle.HallElAngle += HALL_Handle.AvrElSpeedDpp;
-		
-		HALL_Handle.bHallUpdated = 0;
-		hall_updated = 0;               // 同步本地变量
-	}
-	
-	else
-	{
-		HALL_Handle.MeasuredElAngle += HALL_Handle.AvrElSpeedDpp;
-		
-		HALL_Handle.HallElAngle += HALL_Handle.AvrElSpeedDpp + HALL_Handle.DeltaAngle;
-	}
-	//限制电角度在 0~2PI 之间
-	if ( HALL_Handle.HallElAngle < 0.0f)
-	{
-		HALL_Handle.HallElAngle += 2.0f * PI;
-	}
-	else if ( HALL_Handle.HallElAngle > (2.0f * PI))
-	{
-		HALL_Handle.HallElAngle -= 2.0f * PI;
-	}
-	
+	/* 读电流 */
 	ADC_Data[0] = ADC1->JDR1;
 	ADC_Data[1] = ADC2->JDR1;
 	ADC_Data[2] = ADC1->JDR2;
 	
-	CurrlValue[0] = (ADC_Data[0]-offset[0])*0.02197f;
-	CurrlValue[1] = (ADC_Data[1]-offset[1])*0.02197f;
-	CurrlValue[2] = (ADC_Data[2]-offset[2])*0.02197f;
-	
-	HALL_rtU.ia = CurrlValue[0];
-	HALL_rtU.ib = CurrlValue[1];
-	HALL_rtU.ic = CurrlValue[2];
-	
-	//voltage = get_bus_voltage();
-	
-	
-	HALL_rtU.theat = HALL_Handle.HallElAngle;
-	
-	// 用 AvrElSpeedDpp (rad/s) 实时换算 RPM
-	// AvrElSpeedDpp 是每 0.1ms 的电角度增量(rad)，乘以 10000 得 rad/s
-	// RPM = rad/s * 30 / (PI * PolePair)，PolePair = 2
-	// 所以 RPM = rad/s * 30 / (PI * 2) = rad/s * 15 / PI
-	float instant_speed = (HALL_Handle.AvrElSpeedDpp * 10000.0f) * 15.0f / PI;
-	
+	CurrlValue[0] = (ADC_Data[0]-offset[0]) * 0.02197f;
+	CurrlValue[1] = (ADC_Data[1]-offset[1]) * 0.02197f;
+	CurrlValue[2] = (ADC_Data[2]-offset[2]) * 0.02197f;
 
-	// 如果霍尔刚更新过，用霍尔测量的速度；否则用插补速度
-	if (hall_updated) {
-		HALL_rtU.SpeedFd = HALL_Handle.HallSpeed;	
-	} else {
-		// 用一阶滤波平滑过渡
-		static float last_speed = 0.0f;
-		HALL_rtU.SpeedFd = last_speed + 0.1f * (instant_speed - last_speed);
-		last_speed = HALL_rtU.SpeedFd;
+	/* 有感模式：插值霍尔角度（模型内部直接读 HALL_Handle）*/
+	if (Hal_State == 1)
+	{
+		HALL_Handle.MeasuredElAngle += HALL_Handle.AvrElSpeedDpp;
+		HALL_Handle.HallElAngle += HALL_Handle.AvrElSpeedDpp + HALL_Handle.DeltaAngle;
+		if (HALL_Handle.HallElAngle < 0.0f)
+		    HALL_Handle.HallElAngle += 2.0f * PI;
+		else if (HALL_Handle.HallElAngle > 2.0f * PI)
+		    HALL_Handle.HallElAngle -= 2.0f * PI;
 	}
-	
-	FOC_Mode0_step();
-	
-	TIM1->CCR1 = HALL_rtY.tABC[0];
-	TIM1->CCR2 = HALL_rtY.tABC[1];
-	TIM1->CCR3 = HALL_rtY.tABC[2];
+
+	/* 设置 FOC_Model 输入 */
+	rtU.ia        = CurrlValue[0];
+	rtU.ib        = CurrlValue[1];
+	rtU.ic        = CurrlValue[2];
+	rtU.v_bus     = ADC1->JDR3 * 0.020947f;
+	//rtU.SpeedRef  = 400.0f;
+	rtU.Motor_OnOff = 1.0f;//电机使能，1=使能，0=禁用
+
+	/* FOC 一步到位（模型内部自动处理状态机 + 启动 + 无感观测器）*/
+	FOC_Model_step();
+
+	/* 写 PWM */
+	TIM1->CCR1 = (uint32_t)rtY.Tcmp1;
+	TIM1->CCR2 = (uint32_t)rtY.Tcmp2;
+	TIM1->CCR3 = (uint32_t)rtY.Tcmp3;
 }
 
 /* USER CODE END 1 */

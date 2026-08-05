@@ -73,27 +73,23 @@ void on_key_single_click(Button* btn, void* user_data)
 		// 启动 PWM
 		Motor_PWM_Enable();
 		
-//		// 可选：停机后把占空比清零，防止再次启动瞬间冲击
-//		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
-//		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, 0);
-//		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, 0);
-//		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, 0);
     }
 	/* 例如：motor_toggle(); */
 	
 }
 
-
-/* 长按回调：紧急停止 */
+uint8_t open_can = 0;
+/* 
+	长按切换上位机还是点位器控制
+	如果是上位机就要LED1闪烁
+	点位器就常亮
+*/
 void on_key_long_press(Button* btn, void* user_data)
 {
 	(void)btn;
 	(void)user_data;
 	
-	HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
-	/* TODO: 在这里写紧急停止的代码 */
-	
-	/* 例如：motor_emergency_stop(); */
+	open_can = !open_can;// 切换控制源
 }
 //电机PWM统一开启
 void Motor_PWM_Enable(void)

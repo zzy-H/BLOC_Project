@@ -49,6 +49,7 @@ extern "C" {
 
 void send_UVWV(void);
 
+void Potentiometer_SpeedSet(void);
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/

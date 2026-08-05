@@ -2,42 +2,42 @@
 #define __HALL_DRIVER_H
 
 #include "main.h"
-#include "FOC_Mode0.h"
+#include "FOC_Model.h"
 
 #define PI  3.14159265358979f
 
-//218¡ã ÊÇ»ô¶ûµÄ°²×°Æ«²î½Ç£¬ĞèÒªÓÃÊ¾²¨Æ÷²â³öÀ´°Ñ 218¡ã×ª³É»¡¶È
+//218Â° æ˜¯éœå°”çš„å®‰è£…åå·®è§’ï¼Œéœ€è¦ç”¨ç¤ºæ³¢å™¨æµ‹å‡ºæ¥æŠŠ 218Â°è½¬æˆå¼§åº¦
 #define PHASE_SHIFT_ANGLE (float)(218.0f/360.0f*2.0f*PI)
 #define POSITIVE  1
 #define NEGATIVE  -1
 
 typedef struct
 {
-	uint8_t HallState; //»ô¶û×´Ì¬
+	uint8_t HallState; //éœå°”çŠ¶æ€
 	
-	float AvrElSpeedDpp; //µç½ÇËÙ¶È rad/s
+	float AvrElSpeedDpp; //ç”µè§’é€Ÿåº¦ rad/s
 	
-	float MeasuredElAngle; //¼ì²âµ½µÄµç½Ç¶È
+	float MeasuredElAngle; //æ£€æµ‹åˆ°çš„ç”µè§’åº¦
 	
-	float HallElAngle; //¼ÆËãºóµÄµç½Ç¶È
+	float HallElAngle; //è®¡ç®—åçš„ç”µè§’åº¦
 	
-	int8_t Direction; //µç»ú·½Ïò
+	int8_t Direction; //ç”µæœºæ–¹å‘
 	
-	float HallSpeed; //»úĞµ×ªËÙ rpm/min
+	float HallSpeed; //æœºæ¢°è½¬é€Ÿ rpm/min
 	
-	float TempSpeed; //»úĞµ×ªËÙ rpm/min
+	float TempSpeed; //æœºæ¢°è½¬é€Ÿ rpm/min
 	
-	float DeltaAngle; //½Ç¶È²¹³¥
+	float DeltaAngle; //è§’åº¦è¡¥å¿
 	
-	uint8_t bPrevHallState; //Ç°Ò»´Î»ô¶û×´Ì¬
+	uint8_t bPrevHallState; //å‰ä¸€æ¬¡éœå°”çŠ¶æ€
 	
-	float hHighSpeedCapture; //¶¨Ê±Æ÷¼ì²â»ô¶ûĞÅºÅÊ±µÄ¼ÆÊı
+	float hHighSpeedCapture; //å®šæ—¶å™¨æ£€æµ‹éœå°”ä¿¡å·æ—¶çš„è®¡æ•°
 	
-	float MeasureTest; //²âÊÔÖµ
+	float MeasureTest; //æµ‹è¯•å€¼
 	
-	uint8_t bHallUpdated;  // »ô¶û±ßÑØ¸üĞÂ±êÖ¾£¬TIM4 »Øµ÷ÖÃ 1£¬ADC »Øµ÷²éºóÇå 0
+	uint8_t bHallUpdated;  // éœå°”è¾¹æ²¿æ›´æ–°æ ‡å¿—ï¼ŒTIM4 å›è°ƒç½® 1ï¼ŒADC å›è°ƒæŸ¥åæ¸… 0
 	
-	uint8_t bValidTransition;  // ĞÂÔö£º±ê¼ÇÊÇ·ñÎªÓĞĞ§»ô¶ûÌø±ä
+	uint8_t bValidTransition;  // æ ‡è®°æ˜¯å¦ä¸ºæœ‰æ•ˆéœå°”è·³å˜
 }HALL_Handle_t;
 
 

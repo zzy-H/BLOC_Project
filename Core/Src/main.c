@@ -33,9 +33,10 @@
 #include "mybutton.h"
 #include "fdcan.h"
 #include "VFmode.h"
-#include "FOC_mode0.h"
+#include "FOC_Model.h"
 #include "hall_driev.h"
-
+#include "mycan.h"
+#include "myuart.h"
 
 extern HALL_Handle_t HALL_Handle;
 /* USER CODE END Includes */
@@ -58,12 +59,12 @@ extern HALL_Handle_t HALL_Handle;
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-float temp[1];
-//static uint8_t tempData[8] = {0,0,0,0,0,0,0x80,0x7F};
 extern float CurrlValue[3];
 extern uint8_t ADC_OffSet;
-float voltage;
-uint16_t adc_vbus;
+extern uint8_t Hal_State;
+extern uint8_t open_can;
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -118,47 +119,50 @@ int main(void)
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
   
-	// Æô¶¯¶¨Ê±Æ÷µÄ CNT ¼ÆÊı
-	HAL_TIM_Base_Start(&htim1);                              // TIM1 ¼ÆÊı
+	// å¯åŠ¨å®šæ—¶å™¨çš„ CNT è®¡æ•°
+	HAL_TIM_Base_Start(&htim1);                              // TIM1 è®¡æ•°
 	
-	// Æô¶¯¶¨Ê±Æ÷¶ÔÓ¦Í¨µÀµÄ PWM Êä³ö
-	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);                // U+ ÉÏÇÅ
-	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);                // V+ ÉÏÇÅ
-	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);                // W+ ÉÏÇÅ
+	// å¯åŠ¨å®šæ—¶å™¨å¯¹åº”é€šé“çš„ PWM è¾“å‡º
+	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);                // U+ ä¸Šæ¡¥
+	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);                // V+ ä¸Šæ¡¥
+	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);                // W+ ä¸Šæ¡¥
 	
-	// Æô¶¯¶¨Ê±Æ÷¶ÔÓ¦»¥²¹Í¨µÀµÄ PWM Êä³ö
-	HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_1);             // U- ÏÂÇÅ£¨»¥²¹£©
-	HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_2);             // V- ÏÂÇÅ£¨»¥²¹£©
-	HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_3);             // W- ÏÂÇÅ£¨»¥²¹£©
+	// å¯åŠ¨å®šæ—¶å™¨å¯¹åº”äº’è¡¥é€šé“çš„ PWM è¾“å‡º
+	HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_1);             // U- ä¸‹æ¡¥ï¼ˆäº’è¡¥ï¼‰
+	HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_2);             // V- ä¸‹æ¡¥ï¼ˆäº’è¡¥ï¼‰
+	HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_3);             // W- ä¸‹æ¡¥ï¼ˆäº’è¡¥ï¼‰
 	
-	// Æô¶¯Í¨µÀ 4 µÄ PWM Êä³öÓÃÓÚ´¥·¢ ADC ²ÉÑù
-	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);                // ´¥·¢ ADC ²ÉÑù
+	// å¯åŠ¨é€šé“ 4 çš„ PWM è¾“å‡ºç”¨äºè§¦å‘ ADC é‡‡æ ·
+	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);                // è§¦å‘ ADC é‡‡æ ·
 	
-	// ADC ³õÊ¼»¯
-
+	/* åˆå§‹åŒ– DMA æ¥æ”¶ */
+	BSP_Vofa_Init();
+	
+	// ADC åˆå§‹åŒ–
 	BSP_ADC_Init();
 		
 		
-	// °´¼ü³õÊ¼»¯
+	// æŒ‰é”®åˆå§‹åŒ–
 	my_key_init();
 	
-	// FDCAN ³õÊ¼»¯
+	// FDCAN åˆå§‹åŒ–
 	MX_FDCAN1_Init();
-	// ÅäÖÃÂË²¨Æ÷£º½ÓÊÕ ID 0x000~0x1FF µÄËùÓĞ±¨ÎÄ
+	// é…ç½®æ»¤æ³¢å™¨ï¼šæ¥æ”¶ ID 0x000~0x1FF çš„æ‰€æœ‰æŠ¥æ–‡
 	Can_Message_Init();
 	
-	// VF ³õÊ¼»¯
+	// VF åˆå§‹åŒ–
 	VFmode_initialize();
 	
-	// Æô¶¯ TIM4 »ô¶û´«¸ĞÆ÷²¶»ñ£¨ÖĞ¶ÏÄ£Ê½£©
+	// å¯åŠ¨ TIM4 éœå°”ä¼ æ„Ÿå™¨æ•è·ï¼ˆä¸­æ–­æ¨¡å¼ï¼‰
 	HAL_TIMEx_HallSensor_Start_IT(&htim4);
 
-	// ¶ÁÈ¡»ô¶û³õÊ¼µç½Ç¶È
+	// è¯»å–éœå°”åˆå§‹ç”µè§’åº¦
 	HALL_Init_Electrical_Angle();
 
-	// ³õÊ¼»¯ FOC Ä£ĞÍ
-	FOC_Mode0_initialize();
-		
+	// åˆå§‹åŒ– FOC æ¨¡å‹ï¼ˆæœ‰æ„Ÿ+æ— æ„Ÿä¸€ä½“ï¼‰
+	FOC_Model_initialize();
+	Hal_State = 1;              // 1=æœ‰æ„Ÿ(Hall)ï¼Œ0=æ— æ„Ÿ(Flux)
+	rtU.Motor_OnOff = 1.0f;     // ç”µæœºä½¿èƒ½
 	
   /* USER CODE END 2 */
 
@@ -169,35 +173,31 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	
+	if (open_can) {
+    // ä¸Šä½æœºæ¨¡å¼ï¼šLED é—ªçƒï¼ˆæ¯ 500ms ç¿»è½¬ï¼‰
+	USART3_Anylze(); 
+    static uint32_t last_led_tick = 0;
+    if (HAL_GetTick() - last_led_tick >= 500) {
+        HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
+        last_led_tick = HAL_GetTick();
+    }
+	} else {
+		// ç”µä½å™¨æ¨¡å¼ï¼šLED å¸¸äº®
+		HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
+		Potentiometer_SpeedSet();
+	}  
+	
+	FDCAN_Control();
 	  
-	  static float mySpeed = 800.0f;
-	 
-	  // ËÙ¶ÈĞ±ÆÂ£¨Ã¿´Î ¡À10 RPM£©
-    if (HALL_rtU.SpeedRef < mySpeed)
-	{
-		HALL_rtU.SpeedRef += 10.0f;
-	}    
-    else if (HALL_rtU.SpeedRef > mySpeed)
-	{
-		HALL_rtU.SpeedRef -= 10.0f;
-	}
-	  
-	  
-	// µçÔ´µçÑ¹²É¼¯
-	VF_rtU.Vbus = get_bus_voltage();
-	HALL_rtU.vbus = get_bus_voltage();
-	//HALL_rtU.vbus = 24.0f;
-	  
-	// ·¢ËÍÊı¾İ
+	// å‘é€æ•°æ®
 	send_UVWV();
 	
-	// Ã¿ 100ms ·¢Ò»´Î CAN ÏûÏ¢
+	// æ¯ 100ms å‘ä¸€æ¬¡ CAN æ¶ˆæ¯
 	static uint32_t last_can_tick = 0;
 	if (HAL_GetTick() - last_can_tick >= 100) {
 		last_can_tick = HAL_GetTick();
-		
-		uint8_t FDCan_TxData[8] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07};
-		HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &TxHeader, FDCan_TxData);
+		HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &TxHeader, FDCan_RxData);
 	}
 	
 		
@@ -255,7 +255,7 @@ void SystemClock_Config(void)
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
     if (huart->Instance == USART3) {
-        /* DMA ·¢ËÍÍê³É£¬²»ĞèÒª¶îÍâ²Ù×÷£¬HAL ÄÚ²¿»á×Ô¶¯Çå BUSY */
+        /* DMA å‘é€å®Œæˆï¼Œä¸éœ€è¦é¢å¤–æ“ä½œï¼ŒHAL å†…éƒ¨ä¼šè‡ªåŠ¨æ¸… BUSY */
     }
 }
 
@@ -263,16 +263,16 @@ void send_UVWV(void)
 {
 	
 	  
-	if (ADC_OffSet == 1)    // Æ«ÒÆĞ£×¼Íê³Éºó²Å¿ªÊ¼·¢
+	if (ADC_OffSet == 1)    // åç§»æ ¡å‡†å®Œæˆåæ‰å¼€å§‹å‘
 	{
 		float load_data[6];
-		//load_data[0] = CurrlValue[0];        // U ÏàµçÁ÷
-		load_data[0] = HALL_rtU.SpeedFd;
-		load_data[1] = CurrlValue[1];        // V ÏàµçÁ÷
-		load_data[2] = CurrlValue[2];        // W ÏàµçÁ÷
-		load_data[3] = (float)TIM1->CCR1;    // CCR1£¨W ÏàÕ¼¿Õ±È£©
-		load_data[4] = (float)TIM1->CCR2;    // CCR2£¨V ÏàÕ¼¿Õ±È£©
-		load_data[5] = (float)TIM1->CCR3;    // CCR3£¨U ÏàÕ¼¿Õ±È£©
+		//load_data[0] = CurrlValue[0];        // U ç›¸ç”µæµ
+		load_data[0] = state;
+		load_data[1] = CurrlValue[1];        // V ç›¸ç”µæµ
+		load_data[2] = CurrlValue[2];        // W ç›¸ç”µæµ
+		load_data[3] = (float)TIM1->CCR1;    // CCR1ï¼ˆW ç›¸å ç©ºæ¯”ï¼‰
+		load_data[4] = (float)TIM1->CCR2;    // CCR2ï¼ˆV ç›¸å ç©ºæ¯”ï¼‰
+		load_data[5] = (float)TIM1->CCR3;    // CCR3ï¼ˆU ç›¸å ç©ºæ¯”ï¼‰
 		
 
 		static uint8_t tempData[28];
@@ -283,6 +283,40 @@ void send_UVWV(void)
 		HAL_UART_Transmit(&huart3, tempData, 28, 1000);
 		HAL_Delay(1);
 	}
+}
+
+/* ç”µä½å™¨è°ƒé€Ÿï¼ˆPB12 / ADC1_IN11ï¼‰ï¼Œ10 æ¬¡é‡‡æ ·å¹³å‡ï¼ŒèŒƒå›´ 600~2300 RPM */
+void Potentiometer_SpeedSet(void)
+{
+    static uint16_t vres[10] = {0};
+    uint16_t Vres = 0;
+    static uint8_t pot_cnt = 0;
+
+    if(pot_cnt < 10)
+    {
+		uint32_t timeout = 10000;
+		while ((ADC1->CR & ADC_CR_ADSTART) && --timeout);  // ç­‰ ADC ç©ºé—²
+
+		ADC1->CR |= ADC_CR_ADSTART;          // å¯åŠ¨è§„åˆ™ç»„è½¬æ¢
+
+		timeout = 10000;
+		while (!(ADC1->ISR & ADC_ISR_EOC) && --timeout);  // ç­‰ EOC
+
+		if (timeout == 0) return;            // è¶…æ—¶äº†æ”¾å¼ƒæœ¬æ¬¡
+		vres[pot_cnt] = ADC1->DR;            // è¯»ç»“æœ
+        pot_cnt++;
+    }
+    else
+    {
+        pot_cnt = 0;
+        for(uint8_t i = 0; i < 10; i++) Vres += vres[i];
+        Vres /= 10;
+
+        if(Vres > 2048)
+            rtU.SpeedRef = (float)((int)((Vres - 2048) * 0.83) + 600);
+        else
+            rtU.SpeedRef = -(float)((int)((2048 - Vres) * 0.83) + 600);
+    }
 }
 
 

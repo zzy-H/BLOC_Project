@@ -21,7 +21,7 @@
 #include "fdcan.h"
 
 /* USER CODE BEGIN 0 */
-
+#include "mycan.h"
 
 
 //设置发送的 CAN 报文的参数
@@ -220,8 +220,8 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
                 Error_Handler();//读取失败
             }
             /* TODO: 在这里处理接收到的数据 */
+			FDCan_NewFrame = 1;
 			HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin);
-			//HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
         }
     }
 }
